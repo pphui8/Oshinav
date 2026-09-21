@@ -64,9 +64,9 @@ Access tokens are short-lived. Refresh tokens should be stored securely by the
 client. Redis may store refresh or revocation state; PostgreSQL remains the
 source of truth for users and permissions.
 
-## Activities
+## Activities and personal tracking
 
-An activity is the primary object a user tracks. `activity_type` is one of
+An activity is a shared object that many users may track. `activity_type` is one of
 `event`, `ticket`, `lottery`, `preorder`, `merchandise_release`, `pickup`, or
 `shipment`. User status is independent of activity type and may be one of
 `interested`, `applied`, `booked`, `paid`, `ordered`, `won`, `lost`,
@@ -74,12 +74,13 @@ An activity is the primary object a user tracks. `activity_type` is one of
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
-| `GET` | `/activities` | List the user's tracked activities. |
-| `POST` | `/activities` | Create an activity manually. |
-| `GET` | `/activities/{activity_id}` | Get an activity and its milestones. |
-| `PATCH` | `/activities/{activity_id}` | Update editable activity fields. |
-| `DELETE` | `/activities/{activity_id}` | Remove the user's tracked activity. |
-| `PUT` | `/activities/{activity_id}/status` | Set the user's current status. |
+| `GET` | `/activities` | List the authenticated user's tracked activities, including personal state. |
+| `POST` | `/activities` | Create a new shared activity or track a confirmed existing one. |
+| `GET` | `/activities/{activity_id}` | Get a visible shared activity, milestones, sources, and the user's personal state when tracked. |
+| `PATCH` | `/activities/{activity_id}` | Update shared activity fields when the caller has permission. |
+| `POST` | `/activities/{activity_id}/track` | Create the user's tracking relationship; idempotent. |
+| `DELETE` | `/activities/{activity_id}/track` | Stop tracking for the current user only. |
+| `PUT` | `/activities/{activity_id}/status` | Set the current user's status. |
 
 `GET /activities` supports `status`, `activity_type`, `from`, `to`, `page`, and
 `per_page`. The default sort is the next upcoming milestone, then
@@ -87,7 +88,7 @@ An activity is the primary object a user tracks. `activity_type` is one of
 
 ### Create activity
 
-`POST /activities` accepts manual or already-confirmed extracted data:
+`POST /activities` accepts manual or already-confirmed extracted data. It must run shared-activity matching before creating a new record. A successful response identifies whether the activity was `created` or `reused`, and creates the current user's tracking relationship.
 
 ```json
 {
@@ -110,14 +111,19 @@ An activity is the primary object a user tracks. `activity_type` is one of
 }
 ```
 
-The server returns `201 Created`. A timed milestone must include a timezone.
-Date-only milestones use `date` instead of `at`; these fields are mutually
-exclusive.
+The server returns `201 Created` when a new shared activity is created and
+`200 OK` when an existing shared activity is reused. A timed milestone must
+include a timezone. Date-only milestones use `date` instead of `at`; these
+fields are mutually exclusive.
 
-`PUT /activities/{activity_id}/status` accepts
+Stopping tracking through `DELETE /activities/{activity_id}/track` must not delete the shared activity, its milestones, or its sources. `PUT /activities/{activity_id}/status` accepts
 `{ "status": "booked" }` and returns the updated activity. Status changes
 should be retained in status history even when history is not included in the
 default response.
+
+`PATCH /activities/{activity_id}` changes shared information only when the
+caller has the required permission. It must not accept personal status,
+tracking, or notification fields.
 
 ## Import and extraction
 
@@ -129,7 +135,7 @@ not block the request.
 | --- | --- | --- | --- |
 | `POST` | `/imports` | Yes | Submit a source for extraction. |
 | `GET` | `/imports/{import_id}` | Yes | Get extraction status and result. |
-| `POST` | `/imports/{import_id}/confirm` | Yes | Confirm data and create an activity. |
+| `POST` | `/imports/{import_id}/confirm` | Yes | Confirm data, match or create a shared activity, and track it for the caller. |
 
 JSON input to `POST /imports` looks like:
 
@@ -145,8 +151,13 @@ Screenshot imports use `multipart/form-data`. Submission returns `202 Accepted`:
 
 Import status is `queued`, `processing`, `needs_confirmation`, `completed`, or
 `failed`. A completed extraction preserves the original source and exposes
-uncertainty for extracted fields. Confirmation returns `201 Created` with the
-new activity.
+uncertainty for extracted fields. Confirmation must show likely existing
+matches when confidence is uncertain. The request may include an explicit
+`existing_activity_id` after user confirmation; otherwise the server matches
+using stable identifiers, URLs, title, dates, venue, subjects, and type.
+Confirmation returns `201 Created` when a shared activity is created and
+`200 OK` when an existing activity is reused; both responses include the
+user's tracking relationship and the result (`created` or `reused`).
 
 ## Subjects, follows, and discovery
 
@@ -168,7 +179,10 @@ Subjects are works, creators, franchises, shops, venues, brands, or topics.
 `game`, `vtuber`, `creator`, `shop`, `brand`, `venue`, and `topic`. Following
 is idempotent: repeating a follow does not create a duplicate.
 
-Discovery polling, matching, and duplicate suppression run in background jobs.
+Discovery polling, matching, shared-activity updates, and duplicate
+notification suppression run in background jobs. Saving a discovery tracks
+the matched shared activity for the current user; it does not create a second
+activity record when the candidate already exists.
 
 ## Notifications
 
@@ -210,7 +224,10 @@ Clients should include `request_id` when reporting failures.
 
 ## Security and request behavior
 
-- Authentication, ownership, and visibility are checked server-side.
+- Authentication, shared-resource permissions, personal relationship ownership,
+  and visibility are checked server-side.
+- Shared activity deletion is not an MVP operation. Removing a user's tracking
+  relationship uses the `/track` endpoint and never removes shared data.
 - Passwords are never returned by the API and must be stored with a suitable
   password-hashing algorithm.
 - Import, discovery, and notification work is queued and may finish after the

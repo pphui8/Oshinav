@@ -6,7 +6,7 @@ entities:
 
   Activity:
     maps_to: activities
-    description: "A trackable real-world event, ticket, lottery, preorder, release, pickup, or shipment."
+    description: "A shared trackable real-world event, ticket, lottery, preorder, release, pickup, or shipment."
 
   Milestone:
     maps_to: activity_milestones
@@ -26,7 +26,7 @@ entities:
 
   UserActivity:
     maps_to: user_activities
-    description: "A user's tracked relationship with an activity, including the current workflow status."
+    description: "A user's personal tracking relationship with a shared activity, including tracking state, reminders, and current workflow status."
 
   StatusHistory:
     maps_to: activity_status_history
@@ -42,11 +42,11 @@ entities:
 
   Import:
     maps_to: imports
-    description: "A submitted source being extracted into structured activity data."
+    description: "A submitted source being extracted, matched, and contributed to shared activity data."
 
   Discovery:
     maps_to: discoveries
-    description: "A candidate activity found by monitoring sources related to a followed subject."
+    description: "A candidate shared activity found by monitoring sources related to a followed subject."
 
 relationships:
 
@@ -296,17 +296,20 @@ relationships:
       references: subjects.id
 
   - subject: User
-    predicate: creates
+    predicate: contributes_to
     object: Activity
 
     cardinality:
-      subject: one
+      subject: many
       object: many
 
     implementation:
-      table: activities
-      foreign_key: created_by_user_id
-      references: users.id
+      through: activity_sources
+      foreign_keys:
+        subject: submitted_by_user_id
+        object: activity_id
 
     agent_guidance:
-      - "Use this relationship for activities manually created or confirmed by a user."
+      - "A user or monitored source may contribute information to a shared activity."
+      - "Do not treat the contributor as the owner of the activity."
+      - "Use user_activities for the user's tracking relationship and status."

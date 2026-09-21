@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-The application is a mobile-first activity tracking system for time-sensitive anime, game, VTuber, creator, shop, event, ticket, preorder, and merchandise activities.
+The application is a mobile-first system for shared, time-sensitive anime, game, VTuber, creator, shop, event, ticket, preorder, and merchandise activities. Shared activities can be contributed to by many users and monitored sources; each user has an independent tracking relationship with an activity.
 
 The MVP uses a **modular monolith** architecture:
 
@@ -36,8 +36,9 @@ No horizontal scaling, replication, service redundancy, or microservices are req
 │  ┌───────────────────────────────────────┐  │
 │  │          Go / Gin Application         │  │
 │  │                                       │  │
-│  │  Auth  Activity  Follow  Discovery   │  │
-│  │  Import  Notification  User          │  │
+│  │  Auth  Activity  Matching  Follow    │  │
+│  │  Discovery  Import  Notification    │  │
+│  │  User                                │  │
 │  │                                       │  │
 │  └───────────────────┬───────────────────┘  │
 │                      │                      │
@@ -73,6 +74,7 @@ Go Application
 ├── Domain Modules
 │   ├── Auth
 │   ├── Activity
+│   ├── Matching
 │   ├── Follow
 │   ├── Discovery
 │   ├── Import
@@ -106,6 +108,18 @@ PostgreSQL
 
 Long-running or asynchronous work is handled by background workers rather than HTTP handlers.
 
+### Activity ownership and matching
+
+`activities` is a shared domain resource. It must not be scoped to one user and it must not be deleted when one user stops tracking it. Personal state belongs in `user_activities`, including tracking state, current status, reminder preferences, and status history.
+
+Both imports and discovery pass through the matching domain module before creating a shared activity. Matching should prefer stable identifiers and exact source URLs, then use normalized title, type, dates, venue, related subjects, and other extracted identifiers. The result is one of:
+
+* associate the source with an existing activity and optionally apply a confirmed update;
+* create a new shared activity and associate the source;
+* request user confirmation when confidence is insufficient.
+
+The matching operation must be idempotent and safe under concurrent imports. Database uniqueness constraints and transactions are the final protection against duplicate shared activities; Redis may improve throughput but is not the authority.
+
 ---
 
 ## 4. Data Architecture
@@ -121,6 +135,16 @@ Redis is not authoritative and is used for:
 * Background job queues
 
 Object storage is used for binary source data such as screenshots.
+
+The persistent ownership boundary is:
+
+```text
+Shared:   activities → milestones, sources, subjects, external references
+Personal: users → user_activities, follows, notifications, settings, imports
+Bridge:   user_activities(user_id, activity_id)
+```
+
+Activity fields are updated from trusted sources through the matching/update path. Personal status and notification settings are never stored on the shared activity row.
 
 ```text
                  ┌──────────────┐
@@ -176,6 +200,7 @@ Redis
 Worker
  │
  ├── Extraction
+ ├── Matching / activity upsert
  ├── Discovery
  └── Notification
 ```
