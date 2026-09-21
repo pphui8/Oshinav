@@ -6,7 +6,7 @@ The application is a mobile-first activity tracking system for time-sensitive an
 
 The MVP uses a **modular monolith** architecture:
 
-* Mobile client: Expo + React Native + TypeScript
+* Mobile client: Expo + React Native + TypeScript + NativeWind (Tailwind-style utilities)
 * Backend: Go + Gin
 * Database: PostgreSQL
 * Cache / temporary state / job queue: Redis
@@ -24,8 +24,8 @@ No horizontal scaling, replication, service redundancy, or microservices are req
 ┌──────────────────────────────┐
 │       Mobile Client          │
 │                              │
-│ Expo / React Native / TS /   |
-| TailWind                     │
+│ Expo / React Native / TS /   │
+│ NativeWind                   │
 └──────────────┬───────────────┘
                │ HTTPS / REST
                │ JWT
@@ -51,14 +51,12 @@ No horizontal scaling, replication, service redundancy, or microservices are req
                        │
           ┌────────────┼─────────────┐
           ▼            ▼             ▼
-     PostgreSQL      Redis           S3
-     Source of      Cache /        Uploaded
-      Truth         Jobs /          Sources
-                    Sessions
-                       │
-                       ▼
-                External Sources
-                / LLM / APIs
+     PostgreSQL      Redis           S3-compatible
+     Source of      Cache /         object storage
+      Truth         Job queue /     Uploaded sources
+                    rate limits
+
+Background workers ───────► External sources / LLM / APIs
 ```
 
 ---
@@ -118,7 +116,7 @@ Redis is not authoritative and is used for:
 
 * Frequently accessed data
 * Short-lived state
-* JWT/session-related state
+* JWT revocation or refresh state, if enabled
 * Rate limiting
 * Background job queues
 
@@ -145,7 +143,7 @@ Object storage is used for binary source data such as screenshots.
 
 ## 5. Authentication
 
-The client authenticates with the backend using JWT.
+The client authenticates with the backend using JWT access tokens. JWTs carry the request identity; PostgreSQL remains the source of user and permission data. Redis may hold revocation, refresh, or rate-limit state, but it is not the system of record for authentication.
 
 ```text
 Mobile
@@ -199,7 +197,7 @@ AWS EC2
 └── Redis
 ```
 
-Object storage is external to the EC2 instance.
+Object storage is external to the EC2 instance. External websites, APIs, and LLM providers are also outside EC2 and are called by the API or background workers as appropriate.
 
 The MVP intentionally does not include:
 

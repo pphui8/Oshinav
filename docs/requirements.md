@@ -19,6 +19,16 @@ The MVP should support two core discovery paths:
 
 The MVP goal is to complete the save, discover, track, and reminder loop before investing in advanced search, recommendation, or RAG-based features.
 
+## Terminology
+
+- **Activity:** one trackable real-world item, such as a concert, ticket sale, preorder, or pickup window.
+- **Activity type:** the category of an activity, such as event, ticket, lottery, preorder, merchandise release, pickup, or shipment. `Reminder` is not an activity type; it is a notification generated for an activity.
+- **Milestone:** a meaningful date or time belonging to an activity, such as sales opening, application closing, payment due, pickup starting, or event starting. An activity may have several milestones.
+- **User status:** the user's relationship to an activity, such as interested, applied, booked, paid, ordered, won, lost, picked up, attended, or cancelled. These states are workflow-dependent; the implementation must not assume that every activity uses one universal linear sequence. This is separate from the activity type and from notification delivery status.
+- **Source:** the URL, post, screenshot, monitored feed, or manual input from which activity information was obtained.
+
+All milestones that include a time must carry a timezone or an explicit unknown-timezone state. Date-only milestones must remain date-only. Reminder offsets and the default display timezone are MVP decisions that must be defined before notification scheduling is implemented.
+
 ## Goals
 
 - Let users quickly save an event, ticket, preorder, lottery, or reservation from a URL, social post, or screenshot.
@@ -46,17 +56,17 @@ An activity is the main object that users track. It may represent an event, tick
 Expected fields include:
 
 - Activity name
-- Activity type, such as event, ticket, lottery, preorder, merchandise release, pickup, shipment, or reminder
+- Activity type, such as event, ticket, lottery, preorder, merchandise release, pickup, or shipment
 - Date or date range
-- Reservation, application, sales, payment, pickup, or release time when available
+- Milestones, such as reservation, application, sales, payment, pickup, release, or event start
 - Location when relevant
 - Online/offline status when relevant
 - Related work, franchise, creator, shop, or topic
-- User status, such as interested, applied, booked, paid, ordered, won, lost, picked up, attended, or cancelled
-- Nearby or surrounding information when available
+- Current user status and, when needed, status history; examples include interested, applied, booked, paid, ordered, won, lost, picked up, attended, or cancelled
+- Related context when available, such as venue, store, work, creator, or campaign
 - Official website or source URL
 - Source type, such as URL, X post, screenshot, manual entry, or monitored source
-- Notification schedule
+- Notification schedule derived from the activity's milestones
 
 ### Work Or Topic
 
@@ -74,11 +84,11 @@ Expected fields include:
 
 A notification reminds users about an activity at important moments.
 
-Initial notification triggers should include:
+Initial notification triggers should include, when the corresponding milestone is known:
 
-- One day before reservation, application, or sales opens
+- One day before reservation, application, or sales opens, if a reminder offset is configured
 - When reservation, application, or sales opens
-- Before reservation, application, payment, pickup, or preorder closes
+- Before reservation, application, payment, pickup, or preorder closes, if a reminder offset is configured
 - On the event start date
 - On the release, pickup, or shipment date when known
 
@@ -89,7 +99,7 @@ Initial notification triggers should include:
 Users should be able to submit activity information through:
 
 - A webpage URL
-- An X post URL or post content
+- An X post URL or copied post content
 - A screenshot containing activity information
 - Manual entry when automatic extraction is not enough
 
@@ -101,13 +111,13 @@ The system should:
 - Normalize extracted data into a structured activity object.
 - Preserve the original source link or uploaded source reference.
 - Ask for user confirmation or correction when extracted information is uncertain.
-- Create notification nodes based on extracted dates, deadlines, reservation times, release dates, or pickup windows.
+- Create notifications based on extracted milestones such as dates, deadlines, reservation times, release dates, or pickup windows.
 
 ### Active Discovery
 
 Users should be able to follow works, creators, shops, or topics.
 
-After a user follows something, the system should periodically search configured information sources for related activities. Initial source types may include:
+After a user follows something, the system should periodically search configured information sources for related activities. The initial implementation should define the polling cadence and source freshness policy. Initial source types may include:
 
 - Official websites
 - Official X accounts or posts
@@ -122,7 +132,7 @@ The system should:
 - Detect potential new activities.
 - Match discovered activities to followed works, creators, shops, or topics.
 - Associate matched activities with users who follow the related subject.
-- Notify users when a new relevant activity is found.
+- Notify users when a new relevant activity is found, subject to duplicate suppression and the user's notification settings.
 
 ### Activity Tracking
 
@@ -131,7 +141,7 @@ The system should track each registered or discovered activity through key lifec
 The system should:
 
 - Store activity details in a structured format.
-- Maintain notification schedules for each activity.
+- Maintain notification schedules for each activity's milestones.
 - Allow users to record their own status, such as booked, applied, paid, ordered, or attended.
 - Send reminders at configured timing points.
 - Allow users to view upcoming and tracked activities.
