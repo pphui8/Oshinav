@@ -1,0 +1,312 @@
+entities:
+
+  User:
+    maps_to: users
+    description: "A person who tracks activities, follows subjects, and receives notifications."
+
+  Activity:
+    maps_to: activities
+    description: "A trackable real-world event, ticket, lottery, preorder, release, pickup, or shipment."
+
+  Milestone:
+    maps_to: activity_milestones
+    description: "A meaningful date or time belonging to an activity, such as an application deadline or event start."
+
+  Source:
+    maps_to: activity_sources
+    description: "The URL, post, screenshot, monitored feed, or manual input from which activity information was obtained."
+
+  Subject:
+    maps_to: subjects
+    description: "A work, franchise, creator, shop, venue, brand, or topic that can have related activities."
+
+  Follow:
+    maps_to: follows
+    description: "A user's subscription to a subject for activity discovery."
+
+  UserActivity:
+    maps_to: user_activities
+    description: "A user's tracked relationship with an activity, including the current workflow status."
+
+  StatusHistory:
+    maps_to: activity_status_history
+    description: "A historical record of a user's status change for an activity."
+
+  Notification:
+    maps_to: notifications
+    description: "A reminder or discovery notification delivered to a user."
+
+  NotificationSetting:
+    maps_to: notification_settings
+    description: "A user's preferences for activity reminders and discovery notifications."
+
+  Import:
+    maps_to: imports
+    description: "A submitted source being extracted into structured activity data."
+
+  Discovery:
+    maps_to: discoveries
+    description: "A candidate activity found by monitoring sources related to a followed subject."
+
+relationships:
+
+  - subject: User
+    predicate: tracks
+    object: Activity
+
+    cardinality:
+      subject: many
+      object: many
+
+    implementation:
+      through: user_activities
+      foreign_keys:
+        subject: user_id
+        object: activity_id
+
+    agent_guidance:
+      - "Use this relationship when answering what activities a user has saved or is tracking."
+      - "Filter user_activities by user_activities.user_id."
+
+  - subject: User
+    predicate: follows
+    object: Subject
+
+    cardinality:
+      subject: many
+      object: many
+
+    implementation:
+      through: follows
+      foreign_keys:
+        subject: user_id
+        object: subject_id
+
+    agent_guidance:
+      - "Use this relationship when answering which works, creators, shops, or topics a user follows."
+      - "Filter follows by follows.user_id."
+
+  - subject: Activity
+    predicate: has
+    object: Milestone
+
+    cardinality:
+      subject: one
+      object: many
+
+    implementation:
+      table: activity_milestones
+      foreign_key: activity_id
+      references: activities.id
+
+    agent_guidance:
+      - "Use milestones to determine the next deadline, opening, pickup, release, or event date."
+      - "Preserve date-only milestones as dates; do not treat them as timestamps."
+      - "When a milestone has a time, use its timezone for comparisons and reminders."
+
+  - subject: Activity
+    predicate: was_obtained_from
+    object: Source
+
+    cardinality:
+      subject: one
+      object: many
+
+    implementation:
+      table: activity_sources
+      foreign_key: activity_id
+      references: activities.id
+
+    agent_guidance:
+      - "Use this relationship to identify the original URL, post, screenshot, monitored feed, or manual input."
+
+  - subject: Activity
+    predicate: relates_to
+    object: Subject
+
+    cardinality:
+      subject: many
+      object: many
+
+    implementation:
+      through: activity_subjects
+      foreign_keys:
+        subject: activity_id
+        object: subject_id
+
+    agent_guidance:
+      - "Use this relationship when finding activities related to a work, creator, shop, venue, brand, or topic."
+
+  - subject: UserActivity
+    predicate: belongs_to_user
+    object: User
+
+    cardinality:
+      subject: many
+      object: one
+
+    implementation:
+      table: user_activities
+      foreign_key: user_id
+      references: users.id
+
+  - subject: UserActivity
+    predicate: concerns
+    object: Activity
+
+    cardinality:
+      subject: many
+      object: one
+
+    implementation:
+      table: user_activities
+      foreign_key: activity_id
+      references: activities.id
+
+    agent_guidance:
+      - "Read the user's status from user_activities rather than from the activity type."
+      - "User status is workflow-dependent and is not a universal linear lifecycle."
+
+  - subject: UserActivity
+    predicate: has_status_history
+    object: StatusHistory
+
+    cardinality:
+      subject: one
+      object: many
+
+    implementation:
+      table: activity_status_history
+      foreign_key: user_activity_id
+      references: user_activities.id
+
+  - subject: User
+    predicate: receives
+    object: Notification
+
+    cardinality:
+      subject: one
+      object: many
+
+    implementation:
+      table: notifications
+      foreign_key: user_id
+      references: users.id
+
+    agent_guidance:
+      - "Filter notifications by notifications.user_id before returning them to a user."
+      - "Notification delivery status is separate from activity user status."
+
+  - subject: Notification
+    predicate: reminds_about
+    object: Activity
+
+    cardinality:
+      subject: many
+      object: one
+
+    implementation:
+      table: notifications
+      foreign_key: activity_id
+      references: activities.id
+
+  - subject: User
+    predicate: has
+    object: NotificationSetting
+
+    cardinality:
+      subject: one
+      object: one
+
+    implementation:
+      table: notification_settings
+      foreign_key: user_id
+      references: users.id
+
+  - subject: User
+    predicate: submits
+    object: Import
+
+    cardinality:
+      subject: one
+      object: many
+
+    implementation:
+      table: imports
+      foreign_key: user_id
+      references: users.id
+
+    agent_guidance:
+      - "Use imports for URL, X post, screenshot, or manual-source extraction jobs."
+      - "An import may be asynchronous and should be checked by its processing status."
+
+  - subject: Import
+    predicate: produces
+    object: Activity
+
+    cardinality:
+      subject: one
+      object: zero_or_one
+
+    implementation:
+      table: activities
+      foreign_key: import_id
+      references: imports.id
+
+  - subject: Discovery
+    predicate: proposes
+    object: Activity
+
+    cardinality:
+      subject: many
+      object: zero_or_one
+
+    implementation:
+      table: discoveries
+      foreign_key: activity_id
+      references: activities.id
+
+    agent_guidance:
+      - "A discovery is a candidate until the user saves or dismisses it."
+
+  - subject: Discovery
+    predicate: concerns
+    object: Subject
+
+    cardinality:
+      subject: many
+      object: one
+
+    implementation:
+      table: discoveries
+      foreign_key: subject_id
+      references: subjects.id
+
+  - subject: Subject
+    predicate: is_followed_by
+    object: Follow
+
+    cardinality:
+      subject: one
+      object: many
+
+    implementation:
+      table: follows
+      foreign_key: subject_id
+      references: subjects.id
+
+  - subject: User
+    predicate: creates
+    object: Activity
+
+    cardinality:
+      subject: one
+      object: many
+
+    implementation:
+      table: activities
+      foreign_key: created_by_user_id
+      references: users.id
+
+    agent_guidance:
+      - "Use this relationship for activities manually created or confirmed by a user."
