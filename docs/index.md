@@ -5,6 +5,7 @@ The following documentation is currently available. The documents are intentiona
 - [Architecture](architecture.md) — runtime components, data ownership, authentication, jobs, and deployment.
 - [Frontend design](frontend-design-instruction.md) — visual direction, interaction rules, color, typography, and navigation.
 - [Requirements](requirements.md) — product scope, domain terminology, functional requirements, and MVP success criteria.
+- [Requirements research](requirements_research.md) — adoption evidence, adjacent products, social-media substitution analysis, hypotheses, risks, and validation plan.
 
 ```
 .
@@ -14,5 +15,6 @@ The following documentation is currently available. The documents are intentiona
     ├── architecture.md
     ├── frontend-design-instruction.md
     ├── index.md
-    └── requirements.md
+    ├── requirements.md
+    └── requirements_research.md
 ```
